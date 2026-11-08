@@ -119,6 +119,11 @@ h1 .hl{color:var(--blue-deep);position:relative;white-space:nowrap}
 .reason b{color:var(--blue-deep)}
 .gap-box{background:linear-gradient(135deg,var(--blue-soft),#EEF4F8);border-radius:13px;padding:14px;font-size:13.5px;line-height:1.9;color:#4E5E6B;margin-top:4px}
 .gap-box b{display:block;color:var(--blue-deep);font-size:12.5px;margin-bottom:4px;letter-spacing:.5px}
+/* 专业匹配卡 */
+.major-card{border-color:#C9D8E3;background:linear-gradient(180deg,#F7FBFD 0%,#fff 46%)}
+.major-picked{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px}
+.major-picked span{background:linear-gradient(135deg,var(--blue),var(--blue-deep));color:#fff;font-size:13.5px;padding:8px 15px;border-radius:99px;font-weight:700;box-shadow:0 3px 8px rgba(78,123,160,.22)}
+.reason.minor{font-size:12.5px;background:#F5F9FC;color:#6E8BA3}
 .bars{margin-top:4px}
 .bar{margin-bottom:11px}
 .bar .t{display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px}
@@ -228,7 +233,7 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
     <button class="cta blue" id="btnVerify" onclick="verifyCode()">验证并开始 →</button>
     <div class="code-left" id="codeLeft"></div>
     <div id="codeState"></div>
-    <p class="code-tip" id="codeTip">兑换码不区分大小写 · 每个设备独立计数<br>有问题请联系你的卖家 💌</p>
+    <p class="code-tip" id="codeTip">兑换码不区分大小写 · 一个码限一台设备使用<br>有问题请联系你的卖家 💌</p>
     <button class="ghost" id="btnBack" onclick="show('page-home')">← 返回首页</button>
   </div>
 </section>
@@ -258,6 +263,31 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
   <div class="tip-line">选择最符合你真实反应的一项 · 选完才能继续<br>没有标准答案，诚实作答结果才准</div>
 </section>
 
+<!-- ========== 3.5 专业题 ========== -->
+<section id="page-major" class="hidden">
+  <div class="quiz-head">
+    <div class="topbar">
+      <span class="num" id="mStep">最后一步 · 专业背景</span>
+      <span class="pct" id="mPct">已完成 25 题</span>
+    </div>
+    <div class="progress"><i id="mBar" style="width:100%"></i></div>
+  </div>
+  <div class="qcard fade" id="mCard">
+    <div class="qmeta">
+      <span class="qtag" id="mTag">专业背景</span>
+      <span class="qdim" id="mDim">用于匹配具体岗位</span>
+    </div>
+    <div class="qtitle" id="mTitle"></div>
+    <div class="qsub" id="mSub"></div>
+    <div id="mOpts"></div>
+    <div class="qnav">
+      <button id="btnMBack" onclick="backFromMajor()">← 返回上一题</button>
+      <button id="btnMNext" class="next submit" onclick="submitMajor()">生成我的报告 ✨</button>
+    </div>
+  </div>
+  <div class="tip-line">专业不影响人格判定，只用来把岗位建议做得更准<br>选最接近的一类就行</div>
+</section>
+
 <!-- ========== 4. 分析中 ========== -->
 <section id="page-loading" class="hidden">
   <div class="loading">
@@ -282,7 +312,15 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
 
   <div class="r-card"><h3><span class="ic">🔍</span>结果是怎么来的？因果归因</h3><p id="rWhy"></p></div>
 
-  <div class="r-card"><h3><span class="ic">📌</span>你的答题证据（点击展开对照）</h3>
+  <!-- 专业匹配卡（根据专业给出具体岗位方向） -->
+  <div class="r-card major-card" id="rMajorCard">
+    <h3><span class="ic">🎓</span><span id="rMajorTitle">结合你的专业</span></h3>
+    <div class="major-picked" id="rMajorPick"></div>
+    <p class="reason" id="rMajorNote"></p>
+    <p class="reason minor"><b>同专业里也可以考虑：</b><span id="rMajorOther"></span></p>
+  </div>
+
+  <div class="r-card"><h3><span class="ic">📌</span>你的答题证据</h3>
     <div class="evid" id="rEvid"></div>
   </div>
 
@@ -324,10 +362,23 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
 
 <script src="data.js"></script>
 <script>
-/* ============ 兑换码逻辑：一码3天3次 ============ */
+/* ============ 兑换码逻辑：一码3天3次（绑定首次使用设备） ============ */
 const LS_KEY="campus_test_codes_v1";
+const LS_DEV="campus_test_device_v1";
 function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch(e){return{}}}
 function saveStore(s){localStorage.setItem(LS_KEY,JSON.stringify(s))}
+/* 设备指纹：首次访问生成并长期保存，用来把兑换码绑到这台设备 */
+function deviceId(){
+  let id=null;
+  try{id=localStorage.getItem(LS_DEV)}catch(e){}
+  if(!id){
+    const rnd=(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():
+      (Date.now().toString(36)+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
+    id="dev_"+rnd;
+    try{localStorage.setItem(LS_DEV,id)}catch(e){}
+  }
+  return id;
+}
 function normCode(c){return (c||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
 function codeValidFormat(c){return /^CAMPUS[A-Z0-9]{8}$/.test(c)}
 let ACTIVE_CODE=null, CODE_LEFT=3, CODE_LEFT_H=72;
@@ -336,7 +387,13 @@ function checkCode(raw){
   if(!codeValidFormat(c))return{ok:false,msg:"兑换码格式不对，检查下空格或字母哦"};
   const s=loadStore();const now=Date.now();const THREE_D=3*24*3600*1000;
   let rec=s[c];
-  if(!rec){rec={first:now,count:0};s[c]=rec;saveStore(s)}
+  const dev=deviceId();
+  if(!rec){rec={first:now,count:0,dev};s[c]=rec;saveStore(s)}
+  // 已绑到别的设备 → 拒绝，保证"一个码总共只测 3 次"
+  if(rec.dev&&rec.dev!==dev){
+    return{ok:false,msg:"这个兑换码已在另一台设备上使用过了，一个码限一台设备测 3 次 💌"};
+  }
+  if(!rec.dev){rec.dev=dev;saveStore(s)}
   if(now-rec.first>THREE_D)return{ok:false,msg:"这个兑换码已超过 3 天有效期啦，请联系卖家 💌"};
   if(rec.count>=3)return{ok:false,msg:"这个兑换码的 3 次机会已用完啦，请联系卖家 💌"};
   const leftMs=THREE_D-(now-rec.first);
@@ -348,7 +405,7 @@ function consumeOnce(){
   if(r){r.count=(r.count||0)+1;saveStore(s)}
 }
 /* ============ 页面流转 ============ */
-const PAGES=["page-home","page-code","page-quiz","page-loading","page-result"];
+const PAGES=["page-home","page-code","page-quiz","page-major","page-loading","page-result"];
 function show(id){
   PAGES.forEach(p=>document.getElementById(p).classList.add("hidden"));
   document.getElementById(id).classList.remove("hidden");
@@ -382,7 +439,7 @@ function verifyCode(){
 }
 /* ============ 答题 ============ */
 let idx=0, answers=new Array(QUESTIONS.length).fill(-1);
-function startQuiz(){idx=0;answers=new Array(QUESTIONS.length).fill(-1);show("page-quiz");renderQ()}
+function startQuiz(){idx=0;answers=new Array(QUESTIONS.length).fill(-1);MAJOR_KEY=null;show("page-quiz");renderQ()}
 function renderQ(){
   const Q=QUESTIONS[idx];
   document.getElementById("qCount").textContent="第 "+(idx+1)+" / "+QUESTIONS.length+" 题";
@@ -416,7 +473,84 @@ function nextQ(){
     return;
   }
   if(idx<QUESTIONS.length-1){idx++;renderQ();window.scrollTo(0,0)}
-  else runAnalysis();
+  else renderMajor();
+}
+/* ============ 专业题（最后一步，不参与人格计分） ============ */
+let MAJOR_KEY=null, MAJOR_GROUP=null, MAJOR_STEP=1;
+/* 第一步：选学科门类 */
+function renderMajorStep1(){
+  MAJOR_STEP=1;
+  show("page-major");
+  document.getElementById("mTitle").textContent=MAJOR_STEP1.q;
+  document.getElementById("mSub").textContent=MAJOR_STEP1.sub;
+  document.getElementById("mTag").textContent=MAJOR_STEP1.tag;
+  document.getElementById("mDim").textContent="第 1 步 / 共 2 步";
+  document.getElementById("mStep").textContent="最后一步 · 专业背景";
+  document.getElementById("mPct").textContent="已完成 25 题";
+  document.getElementById("mBar").style.width="100%";
+  document.getElementById("btnMNext").style.display="none";
+  document.getElementById("btnMBack").textContent="← 返回上一题";
+  const box=document.getElementById("mOpts");box.innerHTML="";
+  const keys=["1","2","3","4","5","6","7","8","9","0","A","B","C"];
+  let i=0;
+  for(const gk in MAJOR_GROUPS){
+    const g=MAJOR_GROUPS[gk];
+    const b=document.createElement("button");
+    b.className="opt"+(MAJOR_GROUP===gk?" sel":"");
+    b.innerHTML='<span class="k">'+keys[i%keys.length]+'</span><span><b style="font-weight:700;color:#3A3A38">'+g.name+'</b><br><span style="font-size:12px;color:#8A8578">'+g.menus.slice(0,4).join(" · ")+'</span></span>';
+    b.onclick=()=>{MAJOR_GROUP=gk;renderMajorStep2()};
+    box.appendChild(b);
+    i++;
+  }
+  fadeMajorCard();
+}
+/* 第二步：选具体专业类 */
+function renderMajorStep2(){
+  MAJOR_STEP=2;
+  const g=MAJOR_GROUPS[MAJOR_GROUP];
+  if(!g)return renderMajorStep1();
+  document.getElementById("mTitle").textContent=MAJOR_STEP2.q;
+  document.getElementById("mSub").textContent=MAJOR_STEP2.sub;
+  document.getElementById("mTag").textContent=g.name;
+  document.getElementById("mDim").textContent="第 2 步 / 共 2 步";
+  document.getElementById("mStep").textContent="专业细分";
+  document.getElementById("mPct").textContent=g.name;
+  document.getElementById("mBar").style.width="100%";
+  const nb=document.getElementById("btnMNext");
+  nb.style.display="block";
+  nb.textContent=MAJOR_KEY?"生成我的报告 ✨":"先选一个专业类";
+  nb.className="next submit";
+  document.getElementById("btnMBack").textContent="← 换一个门类";
+  const box=document.getElementById("mOpts");box.innerHTML="";
+  const keys=["A","B","C","D","E","F","G","H"];
+  let i=0;
+  for(const sk in g.subs){
+    const sub=g.subs[sk];
+    const b=document.createElement("button");
+    b.className="opt"+(MAJOR_KEY===sk?" sel":"");
+    b.innerHTML='<span class="k">'+keys[i%keys.length]+'</span><span><b style="font-weight:700;color:#3A3A38">'+sub.name+'</b><br><span style="font-size:12px;color:#8A8578">'+sub.jobs.slice(0,4).join(" · ")+'</span></span>';
+    b.onclick=()=>{MAJOR_KEY=sk;renderMajorStep2()};
+    box.appendChild(b);
+    i++;
+  }
+  fadeMajorCard();
+}
+function fadeMajorCard(){
+  const c=document.getElementById("mCard");c.classList.remove("fade");void c.offsetWidth;c.classList.add("fade");
+}
+function renderMajor(){renderMajorStep1()}
+function backFromMajor(){
+  if(MAJOR_STEP===2){renderMajorStep1();window.scrollTo(0,0);return}
+  idx=QUESTIONS.length-1;show("page-quiz");renderQ();window.scrollTo(0,0);
+}
+function submitMajor(){
+  if(MAJOR_STEP===1){if(MAJOR_GROUP)renderMajorStep2();return}
+  if(!MAJOR_KEY){
+    const c=document.getElementById("mCard");
+    c.style.transform="translateX(-7px)";setTimeout(()=>c.style.transform="translateX(7px)",60);setTimeout(()=>c.style.transform="",140);
+    return;
+  }
+  runAnalysis();
 }
 /* ============ 分析动画 ============ */
 function runAnalysis(){
@@ -425,7 +559,8 @@ function runAnalysis(){
     [0,"正在分析你的答题轨迹…","正在为你匹配最接近的职场人格类型…"],
     [30,"正在交叉验证答题一致性…","检查是否存在「嘴上说一套、实际做另一套」的偏差…"],
     [60,"正在生成维度匹配度…","对比 6 大职场维度的相对高低，找出你的核心优势区…"],
-    [85,"正在撰写你的专属报告…","结合你每一道题的答案，生成针对性的成长建议…"]
+    [82,"正在匹配你的专业岗位…","把你的专业和人格类型交叉，锁定最具体的岗位方向…"],
+    [92,"正在撰写你的专属报告…","结合你每一道题的答案，生成针对性的成长建议…"]
   ];
   let i=0;
   const timer=setInterval(()=>{
@@ -478,6 +613,20 @@ function finish(){
   document.getElementById("rMainTitle").textContent=R.title;
   document.getElementById("rPortrait").innerHTML=R.portrait;
   document.getElementById("rWhy").innerHTML=R.why;
+  /* 专业匹配：根据「专业 × 人格」给出具体岗位方向 */
+  const fit=MAJOR_KEY?MAJOR_FIT_ALL[win+MAJOR_KEY]:null;
+  const mk=MAJOR_KEY?getMajorSub(MAJOR_KEY):null;
+  document.getElementById("rMajorCard").classList.remove("hidden");
+  if(mk&&fit){
+    document.getElementById("rMajorTitle").textContent="结合你的专业「"+mk.name+"」";
+    document.getElementById("rMajorPick").innerHTML=fit.pick.map(t=>"<span>"+t+"</span>").join("");
+    document.getElementById("rMajorNote").innerHTML=fit.note;
+    // 同专业里其他可考虑岗位（去掉已推荐的）
+    const others=mk.jobs.filter(j=>fit.pick.indexOf(j)<0).slice(0,5);
+    document.getElementById("rMajorOther").innerHTML=others.length?others.join(" · "):"（该专业方向已全部覆盖）";
+  }else{
+    document.getElementById("rMajorCard").classList.add("hidden");
+  }
   document.getElementById("rEvid").innerHTML=R.evidence.map(e=>'<div class="e"><b>'+e[0]+'</b>'+e[1]+'</div>').join("");
   document.getElementById("rPros").innerHTML=R.pros.map(t=>"<li>"+t+"</li>").join("");
   document.getElementById("rCons").innerHTML=R.cons.map(t=>"<li>"+t+"</li>").join("");
@@ -575,7 +724,7 @@ function saveImage(){
   const {pct,win,order}=window._lastResult;const R=RESULTS[win];
   const W=750, P=44, MW=W-P*2;
   /* 先给足画布高度，绘制完成后按实际内容裁切，保证永不截断 */
-  const MAXH=2200;
+  const MAXH=2600;
   const cv=document.createElement("canvas");
   cv.width=W; cv.height=MAXH;
   const g=cv.getContext("2d");
@@ -697,6 +846,28 @@ function saveImage(){
   g.fillStyle="#E0785C"; g.font="20px sans-serif";
   g.fillText(R.mine.slice(0,2).join(" · "),P+42,y+132);
   y+=128+16;
+
+  /* ---- 专业匹配（结合专业给出的具体岗位） ---- */
+  const fit=MAJOR_KEY?MAJOR_FIT_ALL[win+MAJOR_KEY]:null;
+  const mk=MAJOR_KEY?getMajorSub(MAJOR_KEY):null;
+  if(mk&&fit){
+    g.font="19px sans-serif";
+    const notePlain=fit.note.replace(/<[^>]+>/g,"");
+    const noteLines=splitLines(g,notePlain,MW-52,26);
+    const pickLines=splitLines(g,fit.pick.join(" · "),MW-52,26);
+    const majorH=76+pickLines.length*26+noteLines.length*26+34;
+    g.fillStyle="#fff"; roundRect(g,P,y,MW,majorH,20); g.fill();
+    g.fillStyle="#7FA8C9"; roundRect(g,P+24,y+22,6,24,3); g.fill();
+    g.fillStyle="#3A3A38"; g.font="bold 24px sans-serif"; g.textAlign="left";
+    g.fillText("🎓 结合你的专业「"+mk.name+"」",P+42,y+44);
+    g.fillStyle="#4E7BA0"; g.font="bold 20px sans-serif";
+    let my=y+76;
+    pickLines.forEach(l=>{ g.fillText(l,P+26,my); my+=26; });
+    my+=8;
+    g.fillStyle="#6A665C"; g.font="19px sans-serif";
+    noteLines.forEach(l=>{ g.fillText(l,P+26,my); my+=26; });
+    y+=majorH+16;
+  }
 
   /* ---- 六维匹配度 ---- */
   const barH=70+order.length*32;
