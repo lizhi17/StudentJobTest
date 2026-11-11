@@ -360,7 +360,7 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
 
 </div>
 
-<script src="data.js"></script>
+<script src="data.js?v=20261111"></script>
 <script>
 /* ============ 兑换码逻辑：一码3天3次（绑定首次使用设备） ============ */
 const LS_KEY="campus_test_codes_v1";
@@ -577,35 +577,61 @@ function runAnalysis(){
   },520);
 }
 /* ============ 计分 ============ */
-/* 关键设计：主维度 +3 / 次维度 +1，并按「维度归一化」计算匹配度。
-   归一化消除题量差异，保证 6 个类型都能公平竞争，不会出现"某型永远测不到"。 */
+/* 关键设计：
+   1. 主维度 +3 / 次维度 +1（每题只有一个选项生效）
+   2. max = 该维度在「所有可能选项」下的理论最高分（与用户选择无关），即标准归一化分母。
+      普通题：max[d] += 该题中 d 能拿到的最大分（作为主维度=3，作为次维度=1，两者可叠加=4）
+      反向题：max[d] += 3（选中它则得0分，不选则得3分）
+      → pct = 实际得分 / 理论上限，是一个可解释、可比较的百分比
+   3. 归一化消除了题量差异：E 型理论满分低(39)不会被"题少"惩罚，
+      因为 pct 已把它除以了自己的上限。
+   4. 并列时用绝对得分决胜（而非 DIMS 数组顺序兜底），避免"默认判 A"。 */
 function calcScores(){
-  const s={A:0,B:0,C:0,D:0,E:0,F:0}, max={A:0,B:0,C:0,D:0,E:0,F:0};
+  const s={}, max={};
+  DIMS.forEach(d=>{s[d[0]]=0;max[d[0]]=0;});
   QUESTIONS.forEach((Q,qi)=>{
+    /* ---- 累加分母：该维度的理论最高得分 ---- */
     if(Q.mode==="avoid"){
-      DIMS.forEach(d=>max[d[0]]+=3);
+      DIMS.forEach(d=>{max[d[0]]+=3;});
     }else{
-      Q.o.forEach(op=>{max[op[1]]+=3;max[op[2]]+=1});
+      /* 一道题里，某维度作为主维度得3、作为次维度得1，可能同时出现 → 取该题内最大值 */
+      const best={};
+      Q.o.forEach(op=>{
+        const contrib={};
+        contrib[op[1]]=3;
+        contrib[op[2]]=(contrib[op[2]]||0)+1;
+        Object.keys(contrib).forEach(d=>{
+          best[d]=Math.max(best[d]||0,contrib[d]);
+        });
+      });
+      DIMS.forEach(d=>{max[d[0]]+=best[d[0]]||0;});
     }
-    const a=answers[qi]; if(a<0)return;
+    /* ---- 累加实际得分 ---- */
+    const a=answers[qi]; if(a<0||a>=Q.o.length)return;
     if(Q.mode==="avoid"){
       const picked=Q.o[a][1];
-      DIMS.forEach(d=>{if(d[0]!==picked)s[d[0]]+=3});
+      DIMS.forEach(d=>{if(d[0]!==picked)s[d[0]]+=3;});
     }else{
       s[Q.o[a][1]]+=3; s[Q.o[a][2]]+=1;
     }
   });
   const pct={};
-  DIMS.forEach(d=>{pct[d[0]]=max[d[0]]>0?Math.round(s[d[0]]/max[d[0]]*100):0});
+  DIMS.forEach(d=>{pct[d[0]]=max[d[0]]>0?Math.round(s[d[0]]/max[d[0]]*100):0;});
   let win="A";
-  DIMS.forEach(d=>{if(pct[d[0]]>pct[win])win=d[0]});
-  const order=[...DIMS].sort((a,b)=>pct[b[0]]-pct[a[0]]);
-  return{pct,win,order};
+  DIMS.forEach(d=>{
+    if(pct[d[0]]>pct[win])win=d[0];
+    else if(pct[d[0]]===pct[win]&&s[d[0]]>s[win])win=d[0];
+  });
+  const order=[...DIMS].sort((a,b)=>pct[b[0]]-pct[a[0]]||s[b[0]]-s[a[0]]);
+  return{pct,win,order,s,max};
 }
 function finish(){
   consumeOnce();
-  const {pct,win,order}=calcScores();
-  const R=RESULTS[win];
+  const scores=calcScores();
+  const {pct,win,order}=scores;
+  /* 动态报告：按用户真实得分 + 真实作答生成（不再读写死的 RESULTS） */
+  const R=buildReport(scores,answers);
+  window._lastResult={pct,win,order,report:R};
   document.getElementById("rEmoji").textContent=R.emoji;
   document.getElementById("rTitle").textContent=R.name;
   document.getElementById("rCode").textContent="职涯人格类型 · "+R.code+" 型";
@@ -638,8 +664,9 @@ function finish(){
   document.getElementById("rBars").innerHTML=order.map((d,i)=>
     '<div class="bar'+(i===0?" top":"")+'"><div class="t"><span>'+d[1]+'</span><b>'+pct[d[0]]+'%</b></div><div class="o"><i style="width:'+pct[d[0]]+'%"></i></div></div>').join("");
   const second=order[1], gap=pct[win]-pct[second[0]];
+  const same=(gap<=6);
   document.getElementById("rBarsWhy").innerHTML="你的核心区是「"+order[0][1]+"」，领先第二名「"+second[1]+"」"+gap+" 个百分点。"+
-    (gap<=8?"两者差距不大，说明你具备<strong>双栖型优势</strong>，可以优先考虑两者交叉的岗位（如运营+分析、策划+项目）。":"优势区分度明显，说明你在这一维度的<strong>偏好强度</strong>高于常人，选择时请坚定一点。");
+    (same?"两者差距不大，说明你具备<strong>双栖型优势</strong>，可以优先考虑两者交叉的岗位（如运营+分析、策划+项目）。":"优势区分度明显，说明你在这一维度的<strong>偏好强度</strong>高于常人，选择时请坚定一点。");
   document.getElementById("rTips").innerHTML=R.tips.map(t=>"<li>"+t+"</li>").join("");
   document.getElementById("rKw").innerHTML=R.kw.map(t=>"<span>"+t+"</span>").join("");
   document.getElementById("rNext").innerHTML=R.next;
@@ -652,7 +679,7 @@ function finish(){
     const leftH=Math.max(1,Math.round((3*24*3600*1000-(Date.now()-s.first))/3600000));
     document.getElementById("rLeft").textContent="该兑换码剩余 "+(3-s.count)+" 次 · 约 "+leftH+" 小时后过期";
   }
-  window._lastResult={pct,win,order};
+  window._lastResult={pct,win,order,report:R};
   show("page-result");
   setTimeout(()=>{
     document.querySelectorAll("#rBars .o i").forEach(el=>{el.style.width="0%"});
@@ -721,7 +748,8 @@ function drawRich(g,t,x,y,mw,lineH,baseFont,strongColor){
   return yy;
 }
 function saveImage(){
-  const {pct,win,order}=window._lastResult;const R=RESULTS[win];
+  const {pct,win,order,report}=window._lastResult;
+  const R=report||RESULTS[win];
   const W=750, P=44, MW=W-P*2;
   /* 先给足画布高度，绘制完成后按实际内容裁切，保证永不截断 */
   const MAXH=2600;
