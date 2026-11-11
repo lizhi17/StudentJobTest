@@ -226,7 +226,7 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
 <section id="page-code" class="hidden">
   <div class="badge">🔑 专属测试通道</div>
   <h1>输入兑换码<br>开启你的测试 ✨</h1>
-  <p class="sub">购买后卖家发送的兑换码，一个码 3 天内可测 3 次</p>
+  <p class="sub">购买后卖家发送的兑换码，一个码 3 天内可测 5 次</p>
   <div class="code-box">
     <input id="codeInput" placeholder="例如 CAMPUS-XXXX-XXXX" maxlength="19" autocomplete="off" onkeydown="if(event.key==='Enter')verifyCode()">
     <div class="err" id="codeErr"></div>
@@ -360,9 +360,24 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
 
 </div>
 
-<script src="data.js?v=20261111"></script>
+<script src="data.js?v=20261112"></script>
 <script>
-/* ============ 兑换码逻辑：一码3天3次（绑定首次使用设备） ============ */
+/* ============ 兑换码逻辑：一码3天5次（绑定首次使用设备） ============ */
+/* 防伪：新码后 2 位是前 6 位的校验位（密钥混淆），随便编的码过不了校验；
+   已在用户手机里用过的老码放行（兼容已售出的码），新码必须带正确校验位 */
+const CODE_SECRET=17;
+const CODE_CHARS="ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+function codeChecksum6(s6){
+  let h=CODE_SECRET;
+  for(let i=0;i<s6.length;i++){h=(h*31+CODE_CHARS.indexOf(s6[i]))>>>0;}
+  h=(h^0x9e3779b9)>>>0;
+  return CODE_CHARS[h%32]+CODE_CHARS[Math.floor(h/32)%32];
+}
+function codeHasValidCheck(c){
+  if(!/^CAMPUS[A-Z0-9]{8}$/.test(c))return false;
+  const body=c.slice(6,12),chk=c.slice(12,14);
+  return codeChecksum6(body)===chk;
+}
 const LS_KEY="campus_test_codes_v1";
 const LS_DEV="campus_test_device_v1";
 function loadStore(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch(e){return{}}}
@@ -381,23 +396,29 @@ function deviceId(){
 }
 function normCode(c){return (c||"").toUpperCase().replace(/[^A-Z0-9]/g,"")}
 function codeValidFormat(c){return /^CAMPUS[A-Z0-9]{8}$/.test(c)}
-let ACTIVE_CODE=null, CODE_LEFT=3, CODE_LEFT_H=72;
+/* 一码可用次数 / 天数（改这里即可全局生效） */
+const CODE_MAX_TIMES=5, CODE_DAYS=3;
+let ACTIVE_CODE=null, CODE_LEFT=CODE_MAX_TIMES, CODE_LEFT_H=CODE_DAYS*24;
 function checkCode(raw){
   const c=normCode(raw);
   if(!codeValidFormat(c))return{ok:false,msg:"兑换码格式不对，检查下空格或字母哦"};
-  const s=loadStore();const now=Date.now();const THREE_D=3*24*3600*1000;
+  const s=loadStore();const now=Date.now();const THREE_D=CODE_DAYS*24*3600*1000;
   let rec=s[c];
   const dev=deviceId();
-  if(!rec){rec={first:now,count:0,dev};s[c]=rec;saveStore(s)}
-  // 已绑到别的设备 → 拒绝，保证"一个码总共只测 3 次"
+  if(!rec){
+    // 新码：必须带正确校验位，否则是随便编的
+    if(!codeHasValidCheck(c))return{ok:false,msg:"这个兑换码不存在哦，检查下是不是输错了 💌"};
+    rec={first:now,count:0,dev};s[c]=rec;saveStore(s);
+  }
+  // 已绑到别的设备 → 拒绝，保证"一个码总共只测 5 次"
   if(rec.dev&&rec.dev!==dev){
-    return{ok:false,msg:"这个兑换码已在另一台设备上使用过了，一个码限一台设备测 3 次 💌"};
+    return{ok:false,msg:"这个兑换码已在另一台设备上使用过了，一个码限一台设备测 "+CODE_MAX_TIMES+" 次 💌"};
   }
   if(!rec.dev){rec.dev=dev;saveStore(s)}
-  if(now-rec.first>THREE_D)return{ok:false,msg:"这个兑换码已超过 3 天有效期啦，请联系卖家 💌"};
-  if(rec.count>=3)return{ok:false,msg:"这个兑换码的 3 次机会已用完啦，请联系卖家 💌"};
+  if(now-rec.first>THREE_D)return{ok:false,msg:"这个兑换码已超过 "+CODE_DAYS+" 天有效期啦，请联系卖家 💌"};
+  if(rec.count>=CODE_MAX_TIMES)return{ok:false,msg:"这个兑换码的 "+CODE_MAX_TIMES+" 次机会已用完啦，请联系卖家 💌"};
   const leftMs=THREE_D-(now-rec.first);
-  return{ok:true,code:c,left:3-rec.count,leftH:Math.max(1,Math.round(leftMs/3600000))};
+  return{ok:true,code:c,left:CODE_MAX_TIMES-rec.count,leftH:Math.max(1,Math.round(leftMs/3600000))};
 }
 function consumeOnce(){
   if(!ACTIVE_CODE)return;
@@ -677,7 +698,7 @@ function finish(){
   const s=loadStore()[ACTIVE_CODE];
   if(s){
     const leftH=Math.max(1,Math.round((3*24*3600*1000-(Date.now()-s.first))/3600000));
-    document.getElementById("rLeft").textContent="该兑换码剩余 "+(3-s.count)+" 次 · 约 "+leftH+" 小时后过期";
+    document.getElementById("rLeft").textContent="该兑换码剩余 "+(CODE_MAX_TIMES-s.count)+" 次 · 约 "+leftH+" 小时后过期";
   }
   window._lastResult={pct,win,order,report:R};
   show("page-result");
