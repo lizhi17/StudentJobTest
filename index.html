@@ -680,8 +680,8 @@ function finish(){
   document.getElementById("rGap").innerHTML="<b>你的成长命题</b>"+R.gap;
   document.getElementById("rJobs").innerHTML=R.jobs.map(t=>"<span>"+t+"</span>").join("");
   document.getElementById("rFitWhy").innerHTML="<b>为什么是这些岗位：</b>"+R.fitWhy;
-  document.getElementById("rMine").innerHTML=R.mine.map(t=>"<span>"+t+"</span>").join("");
-  document.getElementById("rMineWhy").innerHTML="<b>为什么避雷：</b>"+R.mineWhy;
+  document.getElementById("rMine").innerHTML=R.mine.length?R.mine.map(t=>"<span>"+t+"</span>").join(""):"<span>本专业内无明显冲突方向 ✅</span>";
+  document.getElementById("rMineWhy").innerHTML="<b>"+(R.mine.length?"为什么避雷：":"说明：")+"</b>"+R.mineWhy;
   document.getElementById("rBars").innerHTML=order.map((d,i)=>
     '<div class="bar'+(i===0?" top":"")+'"><div class="t"><span>'+d[1]+'</span><b>'+pct[d[0]]+'%</b></div><div class="o"><i style="width:'+pct[d[0]]+'%"></i></div></div>').join("");
   const second=order[1], gap=pct[win]-pct[second[0]];
@@ -893,7 +893,7 @@ function saveImage(){
   g.fillStyle="#4E7BA0"; g.font="20px sans-serif";
   g.fillText(R.jobs.slice(0,3).join(" · "),P+42,y+108);
   g.fillStyle="#E0785C"; g.font="20px sans-serif";
-  g.fillText(R.mine.slice(0,2).join(" · "),P+42,y+132);
+  g.fillText(R.mine.length?R.mine.slice(0,2).join(" · "):"本专业内无明显冲突 ✅",P+42,y+132);
   y+=128+16;
 
   /* ---- 专业匹配（结合专业给出的具体岗位） ---- */
