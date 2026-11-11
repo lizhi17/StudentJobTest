@@ -207,7 +207,7 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
     <ul class="points">
       <li>25 道真实职场情境题，选最像你的第一反应</li>
       <li>6 大职场人格维度，测出你的本命岗位</li>
-      <li>专业测评报告：优势、短板、避雷岗位、简历关键词、成长路径</li>
+      <li>专业测评报告：优势、短板、避雷岗位、简历关键词、行动建议</li>
     </ul>
   </div>
 
@@ -339,8 +339,6 @@ button,input,select,textarea{-webkit-appearance:none;font-family:inherit;font-si
   <div class="r-card"><h3><span class="ic">🌱</span>给你的行动建议</h3><ul id="rTips"></ul></div>
 
   <div class="r-card"><h3><span class="ic">📝</span>简历该突出什么词</h3><div class="tags" id="rKw"></div><p class="reason">写法示例：把"负责过 XX"改成"<b>用 XX 做了 XX，带来 XX 结果</b>"。关键词不是装饰，是让 HR 在 10 秒内看懂你能干什么。</p></div>
-
-  <div class="r-card"><h3><span class="ic">🚀</span>你的 5 年成长路径</h3><div class="next-box" id="rNext"></div></div>
 
   <div class="encourage">
     <div class="e">🌷</div>
@@ -690,7 +688,6 @@ function finish(){
     (same?"两者差距不大，说明你具备<strong>双栖型优势</strong>，可以优先考虑两者交叉的岗位（如运营+分析、策划+项目）。":"优势区分度明显，说明你在这一维度的<strong>偏好强度</strong>高于常人，选择时请坚定一点。");
   document.getElementById("rTips").innerHTML=R.tips.map(t=>"<li>"+t+"</li>").join("");
   document.getElementById("rKw").innerHTML=R.kw.map(t=>"<span>"+t+"</span>").join("");
-  document.getElementById("rNext").innerHTML=R.next;
   document.getElementById("rEncourage").innerHTML=
     "<b>"+R.name+"不是一句标签，而是你身上一组已经存在的资源。</b>"+
     "大学里你可能觉得自己「不够卷」「没天赋」，但这份测试想告诉你的是：<b>你身上真正稀缺的东西已经在了，只是还没被用到对的地方</b>。"+
